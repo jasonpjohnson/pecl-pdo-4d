@@ -175,6 +175,8 @@ typedef struct{
 	char *preferred_image_types;
 	int timeout;
 
+	char *charset;
+
 } FOURD;
 
 typedef struct{

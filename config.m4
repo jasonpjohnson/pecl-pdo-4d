@@ -2,7 +2,7 @@ dnl
 dnl $ Id: $
 dnl
 
-PHP_ARG_WITH(pdo-4d, for 4D-SQL support for PDO,
+PHP_ARG_WITH(pdo_4d, for 4D-SQL support for PDO,
 [  --with-pdo-4d         PDO: 4D-SQL support])
 
 if test "$PHP_PDO_4D" != "no"; then

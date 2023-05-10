@@ -1,0 +1,33 @@
+FROM php:7.0-apache
+
+## Update this to use a local directory instead of git
+## Update this to look at a src directory and build into a build directory
+## So that we can build to different directories
+
+# Apt installs
+RUN apt-get update
+RUN apt-get install -y libtool
+RUN apt-get install -y imagemagick
+RUN apt-get install -y git
+
+# Install extensions
+RUN curl -sSL https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions -o - | sh -s \
+      gd \
+      opcache
+
+# Clone and build our extension
+RUN mkdir /root/pdo_4d/
+RUN git clone https://github.com/jasonpjohnson/pecl-pdo-4d.git /usr/lib/php/20151012/ext/pdo_4d/
+WORKDIR /usr/lib/php/20151012/ext/pdo_4d/
+RUN phpize
+RUN ./configure --with-pdo-4d
+RUN make
+RUN make test -ki
+RUN make install -ki
+
+# Activate our extension
+RUN echo "extension=pdo_4d.so" >> "$PHP_INI_DIR/php.ini"
+
+# Print a list of active php modules
+RUN php -m
+

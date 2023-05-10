@@ -67,9 +67,9 @@ typedef struct {
 	//int num_params;
 } pdo_4d_stmt;
 
-extern int _pdo_4d_error(pdo_dbh_t *dbh, pdo_stmt_t *stmt, const char *file, int line TSRMLS_DC);
-#define pdo_4d_error(s) _pdo_4d_error(s, NULL, __FILE__, __LINE__ TSRMLS_CC)
-#define pdo_4d_error_stmt(s) _pdo_4d_error(stmt->dbh, stmt, __FILE__, __LINE__ TSRMLS_CC)
+extern int _pdo_4d_error(pdo_dbh_t *dbh, pdo_stmt_t *stmt, const char *file, int line);
+#define pdo_4d_error(s) _pdo_4d_error(s, NULL, __FILE__, __LINE__)
+#define pdo_4d_error_stmt(s) _pdo_4d_error(stmt->dbh, stmt, __FILE__, __LINE__)
 
 extern struct pdo_stmt_methods fourd_stmt_methods;
 

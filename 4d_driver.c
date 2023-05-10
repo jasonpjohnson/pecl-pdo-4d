@@ -27,7 +27,6 @@
 
 /* $ Id: $ */
 
-#include "php_pdo_4d.h"
 
 //#if HAVE_PDO_4D
 #ifdef HAVE_CONFIG_H
@@ -44,7 +43,7 @@
 
 #include "php_pdo_4d_int.h"
 
-int _pdo_4d_error(pdo_dbh_t *dbh, pdo_stmt_t *stmt, const char *file, int line TSRMLS_DC) /* {{{ */
+int _pdo_4d_error(pdo_dbh_t *dbh, pdo_stmt_t *stmt, const char *file, int line) /* {{{ */
 {
 	pdo_4d_db_handle *H = (pdo_4d_db_handle *)dbh->driver_data;
 	pdo_error_type *pdo_err;
@@ -71,8 +70,7 @@ int _pdo_4d_error(pdo_dbh_t *dbh, pdo_stmt_t *stmt, const char *file, int line T
 		pefree(einfo->errmsg, dbh->is_persistent);
 		einfo->errmsg = NULL;
 	}
-	strncpy(*pdo_err, fourd_sqlstate(H->server),5);
-	*pdo_err[5]=0;
+	strlcpy(*pdo_err, fourd_sqlstate(H->server), 6);
 	/* if error_code is not null => get error message */
 	/* printf("einfo->errcode:%d\n",einfo->errcode); */
 	if (einfo->errcode) {
@@ -80,17 +78,18 @@ int _pdo_4d_error(pdo_dbh_t *dbh, pdo_stmt_t *stmt, const char *file, int line T
 		einfo->errmsg = pestrdup(fourd_error(H->server), dbh->is_persistent);
 	}
 	else {
-		strcpy(*pdo_err, PDO_ERR_NONE);
+	  strlcpy(*pdo_err, PDO_ERR_NONE, 6);
 		return 0;
 	}
 	if (!dbh->methods) {
-		zend_throw_exception_ex(php_pdo_get_exception(), 0 TSRMLS_CC, "SQLSTATE[%s] [%d] %s",
+		zend_throw_exception_ex(php_pdo_get_exception(), 0, "SQLSTATE[%s] [%d] %s",
 				*pdo_err, einfo->errcode, einfo->errmsg);
 	}
 
 	return einfo->errcode;
 }
-static int pdo_4d_fetch_error_func(pdo_dbh_t *dbh, pdo_stmt_t *stmt, zval *info TSRMLS_DC)
+
+static void pdo_4d_fetch_error_func(pdo_dbh_t *dbh, pdo_stmt_t *stmt, zval *info )
 {
 	pdo_4d_db_handle *H = (pdo_4d_db_handle *)dbh->driver_data;
 	pdo_4d_error_info *einfo = &H->einfo;
@@ -103,18 +102,19 @@ static int pdo_4d_fetch_error_func(pdo_dbh_t *dbh, pdo_stmt_t *stmt, zval *info 
 	}
 
 	if (einfo->errcode) {
-		add_next_index_long(info, einfo->errcode);
-#if PHP_VERSION_ID >= 70000
-		add_next_index_string(info, einfo->errmsg);
-#else
-		add_next_index_string(info, einfo->errmsg, 1);
-#endif
+        add_next_index_long(info, einfo->errcode);
+        add_next_index_string(info, einfo->errmsg);
 	}
 
-	return 1;
+	return;
 }
-static int fourd_handle_closer(pdo_dbh_t *dbh TSRMLS_DC) /* {{{ */
+
+static void fourd_handle_closer(pdo_dbh_t *dbh ) /* {{{ */
 {
+  	if (!dbh || !dbh->driver_data) {
+		return;
+	}
+	
 	pdo_4d_db_handle *H = (pdo_4d_db_handle *)dbh->driver_data;
 
 	if (H) {
@@ -130,13 +130,14 @@ static int fourd_handle_closer(pdo_dbh_t *dbh TSRMLS_DC) /* {{{ */
 		pefree(H, dbh->is_persistent);
 		dbh->driver_data = NULL;
 	}
-	return 0;
+	return;
 }
-static long fourd_handle_doer(pdo_dbh_t *dbh, const char *sql, long sql_len TSRMLS_DC)
+
+static long fourd_handle_doer(pdo_dbh_t *dbh, const zend_string *sql)
 {
 	pdo_4d_db_handle *H = (pdo_4d_db_handle *)dbh->driver_data;
 
-	if (fourd_exec(H->server, sql)) {
+	if (fourd_exec(H->server, ZSTR_VAL(sql))) {
 		pdo_4d_error(dbh);
 		return -1;
 	} else {
@@ -149,145 +150,144 @@ static long fourd_handle_doer(pdo_dbh_t *dbh, const char *sql, long sql_len TSRM
 		}
 	}
 }
-static int fourd_handle_preparer(pdo_dbh_t *dbh, const char *sql, long sql_len, pdo_stmt_t *stmt, zval *driver_options TSRMLS_DC)
+
+static bool fourd_handle_preparer(pdo_dbh_t *dbh, zend_string *sql, pdo_stmt_t *stmt, zval *driver_options)
 {
-	pdo_4d_db_handle *H = (pdo_4d_db_handle *)dbh->driver_data;
-	pdo_4d_stmt *S = ecalloc(1, sizeof(pdo_4d_stmt));
-	char *nsql = NULL;
-	long unsigned int nsql_len = 0;
-	int ret;
-	S->H = H;
-	stmt->driver_data = S;
-	stmt->methods = &fourd_stmt_methods;
-	S->charset=H->charset;
-	/*if (H->emulate_prepare) {
-		printf("*** emulate_prepare ***\n");
-		goto end;
-	}*/
+    pdo_4d_db_handle *H = (pdo_4d_db_handle *)dbh->driver_data;
+    pdo_4d_stmt *S = ecalloc(1, sizeof(pdo_4d_stmt));
+    zend_string *nsql = NULL;
+    int ret;
 
-	/* prepare statement */
-	stmt->supports_placeholders = PDO_PLACEHOLDER_POSITIONAL;
+    S->H = H;
+    stmt->driver_data = S;
+    stmt->methods = &fourd_stmt_methods;
+    S->charset = H->charset;
 
-	ret = pdo_parse_params(stmt, (char*)sql, sql_len, &nsql, &nsql_len TSRMLS_CC);
-	if (ret == 1) {
-		/* query was rewritten */
-		sql = nsql;
-		sql_len = nsql_len;
-	} else if (ret == -1) {
-		/* failed to parse */
-		strcpy(dbh->error_code, stmt->error_code);
-		return 0;
-	}
-	if((S->state=fourd_prepare_statement(H->server,sql))==NULL) {
-		if (nsql) {
-			efree(nsql);
-		}
-		pdo_4d_error(dbh);
-		/*printf("Error sur prepare (%d):%s\n",fourd_errno(cnx),fourd_error(cnx));*/
-	}
+    /* prepare statement */
+    stmt->supports_placeholders = PDO_PLACEHOLDER_POSITIONAL;
 
-	if (nsql) {
-		efree(nsql);
-	}
-	return 1;
-	/* end of prepare statement */
-	end:
-	stmt->supports_placeholders = PDO_PLACEHOLDER_NONE;
+    ret = pdo_parse_params(stmt, sql, &nsql);
+    if (ret == 1) {
+	  /* query was rewritten */
+	  sql = nsql;
+    } else if (ret == -1) {
+        /* failed to parse */
+        strcpy(dbh->error_code, dbh->error_code);
+        return false;
+    }
+    if ((S->state = fourd_prepare_statement(H->server, ZSTR_VAL(sql))) == NULL) {
+        if (nsql) {
+		  zend_string_release(nsql);
+        }
+        pdo_4d_error(dbh);
+        /*printf("Error sur prepare (%d):%s\n",fourd_errno(cnx),fourd_error(cnx));*/
+    }
+	
+    if (nsql) {
+        zend_string_release(nsql);
+    }
 
-	return 1;
+    return true;
+    /* end of prepare statement */
+end:
+    stmt->supports_placeholders = PDO_PLACEHOLDER_NONE;
+
+    return 1;
 }
 
-static int pdo_4d_set_attribute(pdo_dbh_t *dbh, long attr, zval *val TSRMLS_DC)
+static bool pdo_4d_set_attribute(pdo_dbh_t *dbh, zend_long attr, zval *val)
 {
-	pdo_4d_db_handle *H = (pdo_4d_db_handle *)dbh->driver_data;
-	switch (attr) {
-		case PDO_FOURD_ATTR_CHARSET:
-			((pdo_4d_db_handle *)dbh->driver_data)->charset = pestrdup(Z_STRVAL_P(val), dbh->is_persistent);
-			return 1;
-		case PDO_FOURD_ATTR_PREFERRED_IMAGE_TYPES:
-			fourd_set_preferred_image_types(H->server,Z_STRVAL_P(val));
-			return 1;
-		default:
-			return 0;
-	}
-}
-static int fourd_handle_begin(pdo_dbh_t *dbh TSRMLS_DC)
-{
-	return 0 <= fourd_handle_doer(dbh, ZEND_STRL("START") TSRMLS_CC);
-}
+    pdo_4d_db_handle *H = (pdo_4d_db_handle *)dbh->driver_data;
 
-static int fourd_handle_commit(pdo_dbh_t *dbh TSRMLS_DC)
-{
-	return 0 <= fourd_handle_doer(dbh, ZEND_STRL("COMMIT") TSRMLS_CC);
+    switch (attr) {
+        case PDO_FOURD_ATTR_CHARSET:
+            H->charset = pestrdup(Z_STRVAL_P(val), dbh->is_persistent);
+            return true;
+
+        case PDO_FOURD_ATTR_PREFERRED_IMAGE_TYPES:
+            fourd_set_preferred_image_types(H->server, Z_STRVAL_P(val));
+            return true;
+
+        default:
+            return false;
+    }
 }
 
-static int fourd_handle_rollback(pdo_dbh_t *dbh TSRMLS_DC)
+static bool fourd_handle_begin(pdo_dbh_t *dbh )
 {
-	return 0 <= fourd_handle_doer(dbh, ZEND_STRL("ROLLBACK") TSRMLS_CC);
+	return 0 <= fourd_handle_doer(dbh, zend_string_init("BEGIN", sizeof("BEGIN")-1, 0));
 }
 
-static int pdo_4d_get_attribute(pdo_dbh_t *dbh, long attr, zval *return_value TSRMLS_DC)
+static bool fourd_handle_commit(pdo_dbh_t *dbh )
 {
-	pdo_4d_db_handle *H = (pdo_4d_db_handle *)dbh->driver_data;
-
-	switch (attr) {
-		case PDO_FOURD_ATTR_CHARSET:
-#if PHP_VERSION_ID >= 70000
-			ZVAL_STRING(return_value, H->charset);
-#else
-			ZVAL_STRING(return_value, H->charset, 1);
-#endif
-			break;
-		case PDO_FOURD_ATTR_PREFERRED_IMAGE_TYPES:
-			//ZVAL_STRING(return_value, fourd_get_preferred_image_types(H->server), 1);
-
-#if PHP_VERSION_ID >= 70000
-			ZVAL_STRING(return_value, H->charset);
-#else
-			ZVAL_STRING(return_value, H->charset, 1);
-#endif
-			break;
-		default:
-			return 0;
-	}
-
-	return 1;
+	return 0 <= fourd_handle_doer(dbh, zend_string_init("COMMIT", sizeof("COMMIT")-1, 0));
 }
-static int fourd_handle_quoter(pdo_dbh_t *dbh, const char *unquoted, int unquotedlen, char **quoted, int *quotedlen, enum pdo_param_type paramtype  TSRMLS_DC) /* {{{ */
+
+static bool fourd_handle_rollback(pdo_dbh_t *dbh )
 {
-	int qcount = 0;
-	char const *cu, *l, *r;
+	return 0 <= fourd_handle_doer(dbh, zend_string_init("ROLLBACK", sizeof("ROLLBACK")-1, 0));
+}
+
+static int pdo_4d_get_attribute(pdo_dbh_t *dbh, long attr, zval *return_value)
+{
+    pdo_4d_db_handle *H = (pdo_4d_db_handle *)dbh->driver_data;
+
+    switch (attr) {
+        case PDO_FOURD_ATTR_CHARSET:
+            ZVAL_STRING(return_value, H->charset);
+            break;
+        case PDO_FOURD_ATTR_PREFERRED_IMAGE_TYPES:
+            ZVAL_STRING(return_value, fourd_get_preferred_image_types(H->server));
+            break;
+        default:
+            return 0;
+    }
+
+    return 1;
+}
+
+static zend_string* fourd_handle_quoter(pdo_dbh_t *dbh, const zend_string *unquoted, enum pdo_param_type paramtype)
+{
+    int qcount = 0;
 	char *c;
+    zend_string *temp_str, *quoted;
 
-	if (!unquotedlen) {
-		*quotedlen = 2;
-		*quoted = emalloc(*quotedlen+1);
-		strcpy(*quoted, "''");
-		return 1;
-	}
+    if (!ZSTR_LEN(unquoted)) {
+        quoted = zend_string_init("''", 2, 0);
+        return quoted;
+    }
 
-	/* count single quotes */
-	for (cu = unquoted; (cu = strchr(cu,'\'')); qcount++, cu++)
-		; /* empty loop */
+    /* count single quotes */
+    for (c = (char *)ZSTR_VAL(unquoted); (c = strchr(c, '\'')); qcount++, c++)
+        ; /* empty loop */
 
-	*quotedlen = unquotedlen + qcount + 2;
-	*quoted = c = emalloc(*quotedlen+1);
-	*c++ = '\'';
+    int quotedlen = ZSTR_LEN(unquoted) + qcount + 2;
+    quoted = zend_string_alloc(quotedlen, 0);
 
-	/* foreach (chunk that ends in a quote) */
-	for (l = unquoted; (r = strchr(l,'\'')); l = r+1) {
-		strncpy(c, l, r-l+1);
-		c += (r-l+1);
-		*c++ = '\'';			/* add second quote */
-	}
+    c = ZSTR_VAL(quoted);
+    *c++ = '\'';
 
-	/* Copy remainder and add enclosing quote */
-	strncpy(c, l, *quotedlen-(c-*quoted)-1);
-	(*quoted)[*quotedlen-1] = '\'';
-	(*quoted)[*quotedlen]   = '\0';
+    /* foreach (chunk that ends in a quote) */
+    char *l = (char *)ZSTR_VAL(unquoted), *r;
+    while ((r = strchr(l, '\''))) {
+        temp_str = zend_string_init(l, r - l + 1, 0);
+        memcpy(c, ZSTR_VAL(temp_str), ZSTR_LEN(temp_str));
+        c += ZSTR_LEN(temp_str);
+        *c++ = '\''; /* add second quote */
+        zend_string_release(temp_str);
+        l = r + 1;
+    }
 
-	return 1;
+    /* Copy remainder and add enclosing quote */
+    temp_str = zend_string_init(l, ZSTR_LEN(unquoted) - (l - ZSTR_VAL(unquoted)), 0);
+    memcpy(c, ZSTR_VAL(temp_str), ZSTR_LEN(temp_str));
+    zend_string_release(temp_str);
+    ZSTR_VAL(quoted)[quotedlen - 1] = '\'';
+    ZSTR_VAL(quoted)[quotedlen] = '\0';
+
+    return quoted;
 }
+
 /* }}} */
 
 static struct pdo_dbh_methods fourd_methods = {
@@ -306,7 +306,7 @@ static struct pdo_dbh_methods fourd_methods = {
 };
 
 
-static int pdo_4d_handle_factory(pdo_dbh_t *dbh, zval *driver_options TSRMLS_DC)
+static int pdo_4d_handle_factory(pdo_dbh_t *dbh, zval *driver_options )
 {
 	pdo_4d_db_handle *H;
 	char *host = NULL;
@@ -326,9 +326,6 @@ static int pdo_4d_handle_factory(pdo_dbh_t *dbh, zval *driver_options TSRMLS_DC)
 			{ "password",  	"",	0 },
 	};
 	php_pdo_parse_data_source(dbh->data_source, dbh->data_source_len, vars,6);
-/*	printf("Debut du constructeur\n");
-	printf("preferred_image_types:%s\n",INI_STR("pdo_4d.preferred_image_types"));
-*/
 
 	H=pecalloc(1, sizeof(pdo_4d_db_handle), dbh->is_persistent);
 
@@ -376,21 +373,18 @@ static int pdo_4d_handle_factory(pdo_dbh_t *dbh, zval *driver_options TSRMLS_DC)
 	charset = vars[3].optval;
 	H->charset=charset;
 	//connection
-	if (fourd_connect(H->server, host, user, pwd, dbname, port))
+	if (fourd_connect(H->server, host, user, pwd, dbname, port)) // Returns 1 for an error
 	{
 		pdo_4d_error(dbh);
 		dbh->methods = &fourd_methods;
 		return 0;
 	}
 
-
-
 	H->attached = 1;
 
 	dbh->alloc_own_columns = 1;
 	dbh->max_escaped_char_length = 2;
-
-
+	
 	dbh->methods = &fourd_methods;
 
 	return 1;

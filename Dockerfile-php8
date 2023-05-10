@@ -1,0 +1,66 @@
+FROM php:8.2-apache
+
+# Apt installs
+RUN apt-get update
+RUN apt-get install -y libtool
+RUN apt-get install -y imagemagick
+RUN apt-get install -y git
+
+# Install extensions
+RUN docker-php-ext-install opcache
+
+ARG EXTENSION_DIR
+ARG CACHEBUST
+
+RUN echo "$CACHEBUST"
+
+# Clone and build our extension
+RUN mkdir -p $EXTENSION_DIR/ext/pdo_4d
+
+COPY ./lib4d_sql/CREDITS $EXTENSION_DIR/ext/pdo_4d/lib4d_sql/CREDITS
+COPY ./lib4d_sql/LICENSE $EXTENSION_DIR/ext/pdo_4d/lib4d_sql/LICENSE
+COPY ./lib4d_sql/PHP $EXTENSION_DIR/ext/pdo_4d/lib4d_sql/PHP
+COPY ./lib4d_sql/README $EXTENSION_DIR/ext/pdo_4d/lib4d_sql/README
+COPY ./lib4d_sql/base64.c $EXTENSION_DIR/ext/pdo_4d/lib4d_sql/base64.c
+COPY ./lib4d_sql/base64.h $EXTENSION_DIR/ext/pdo_4d/lib4d_sql/base64.h
+COPY ./lib4d_sql/communication.c $EXTENSION_DIR/ext/pdo_4d/lib4d_sql/communication.c
+COPY ./lib4d_sql/fourd.c $EXTENSION_DIR/ext/pdo_4d/lib4d_sql/fourd.c
+COPY ./lib4d_sql/fourd.h $EXTENSION_DIR/ext/pdo_4d/lib4d_sql/fourd.h
+COPY ./lib4d_sql/fourd_int.h $EXTENSION_DIR/ext/pdo_4d/lib4d_sql/fourd_int.h
+COPY ./lib4d_sql/fourd_interne.c $EXTENSION_DIR/ext/pdo_4d/lib4d_sql/fourd_interne.c
+COPY ./lib4d_sql/fourd_result.c $EXTENSION_DIR/ext/pdo_4d/lib4d_sql/fourd_result.c
+COPY ./lib4d_sql/fourd_type.c $EXTENSION_DIR/ext/pdo_4d/lib4d_sql/fourd_type.c
+COPY ./lib4d_sql/fourd_type.h $EXTENSION_DIR/ext/pdo_4d/lib4d_sql/fourd_type.h
+COPY ./lib4d_sql/list.txt $EXTENSION_DIR/ext/pdo_4d/lib4d_sql/list.txt
+COPY ./lib4d_sql/sqlstate.c $EXTENSION_DIR/ext/pdo_4d/lib4d_sql/sqlstate.c
+COPY ./lib4d_sql/utils.c $EXTENSION_DIR/ext/pdo_4d/lib4d_sql/utils.c
+COPY ./lib4d_sql/utils.h $EXTENSION_DIR/ext/pdo_4d/lib4d_sql/utils.h
+
+COPY ./4d_driver.c $EXTENSION_DIR/ext/pdo_4d/4d_driver.c
+COPY ./4d_statement.c $EXTENSION_DIR/ext/pdo_4d/4d_statement.c
+COPY ./config.w32 $EXTENSION_DIR/ext/pdo_4d/config.w32
+COPY ./config.m4 $EXTENSION_DIR/ext/pdo_4d/config.m4
+COPY ./package.xml $EXTENSION_DIR/ext/pdo_4d/package.xml
+COPY ./pdo_4d.c $EXTENSION_DIR/ext/pdo_4d/pdo_4d.c
+COPY ./pdo_4d.dsp $EXTENSION_DIR/ext/pdo_4d/pdo_4d.dsp
+COPY ./pdo_4d_logos.h $EXTENSION_DIR/ext/pdo_4d/pdo_4d_logos.h
+COPY ./php_pdo_4d.h $EXTENSION_DIR/ext/pdo_4d/php_pdo_4d.h
+COPY ./php_pdo_4d_int.h $EXTENSION_DIR/ext/pdo_4d/php_pdo_4d_int.h
+
+RUN echo "extension_dir=$EXTENSION_DIR" >> "$PHP_INI_DIR/php.ini"
+
+WORKDIR $EXTENSION_DIR"/ext/pdo_4d"
+RUN phpize --clean
+RUN phpize
+RUN ./configure --with-pdo-4d --prefix="$EXTENSION_DIR/ext/pdo_4d"
+RUN make clean
+RUN make -v
+RUN make install
+
+# Activate our extension
+RUN echo "extension=pdo_4d.so" >> "$PHP_INI_DIR/php.ini"
+
+# Print a list of active php modules
+RUN php -m
+
+RUN make test

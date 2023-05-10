@@ -56,6 +56,13 @@ zend_function_entry pdo_4d_functions[] = {
 };
 /* }}} */
 
+/* {{{ pdo_4d_deps[] */
+static const zend_module_dep pdo_4d_deps[] = {
+	ZEND_MOD_REQUIRED("pdo")
+	ZEND_MOD_END
+};
+/* }}} */
+
 
 /* {{{ pdo_4d_module_entry
  */
