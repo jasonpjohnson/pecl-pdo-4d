@@ -109,8 +109,21 @@ PHP_MINIT_FUNCTION(pdo_4d)
 		return FAILURE;
   }
   /* fprintf(stderr,"Registering pdo-4d driver OK\n"); **/
-	REGISTER_PDO_CLASS_CONST_LONG("FOURD_ATTR_CHARSET", (long)PDO_FOURD_ATTR_CHARSET);
-	REGISTER_PDO_CLASS_CONST_LONG("FOURD_ATTR_PREFERRED_IMAGE_TYPES", (long)PDO_FOURD_ATTR_PREFERRED_IMAGE_TYPES);
+    #if PHP_VERSION_ID < 80500
+        REGISTER_PDO_CLASS_CONST_LONG("FOURD_ATTR_CHARSET", (long)PDO_FOURD_ATTR_CHARSET);
+        REGISTER_PDO_CLASS_CONST_LONG("FOURD_ATTR_PREFERRED_IMAGE_TYPES", (long)PDO_FOURD_ATTR_PREFERRED_IMAGE_TYPES);
+    #else
+        zend_declare_class_constant_long(
+            php_pdo_get_dbh_ce(),
+            "FOURD_ATTR_CHARSET",
+            sizeof("FOURD_ATTR_CHARSET")-1,
+            (zend_long) PDO_FOURD_ATTR_CHARSET);
+        zend_declare_class_constant_long(
+            php_pdo_get_dbh_ce(),
+            "FOURD_ATTR_PREFERRED_IMAGE_TYPES",
+            sizeof("FOURD_ATTR_PREFERRED_IMAGE_TYPES")-1,
+            (zend_long) PDO_FOURD_ATTR_PREFERRED_IMAGE_TYPES);
+    #endif
 
 	return SUCCESS;
 }
