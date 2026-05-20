@@ -1,3 +1,15 @@
+==================================
+
+To build for a new version of PHP (ie, php 8.6):
+- Update `Dockerfile-php8` with the correct version of the php base image (first line in the file)
+- Attempt to build the new shared library locally
+  - `docker build -f Dockerfile-php8 --platform linux/amd64 -t pecl-pdo-4d:php86 .` (update tag to match php version)
+- When it succeeds, copy the shared library file out of the image and save in the existing `out` directory in this repo following the existing naming convention in that directory
+
+The original instructions below are mostly contained in these Dockerfiles but are retained for future reference.
+
+==================================
+
 Installing PDO_4D
 ---------------
 
