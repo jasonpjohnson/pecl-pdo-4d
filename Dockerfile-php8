@@ -1,13 +1,13 @@
-FROM php:8.2-apache
+FROM php:8.5-cli
 
 # Apt installs
 RUN apt-get update
-RUN apt-get install -y libtool
-RUN apt-get install -y imagemagick
-RUN apt-get install -y git
+#RUN apt-get install -y libtool
+#RUN apt-get install -y imagemagick
+#RUN apt-get install -y git
 
 # Install extensions
-RUN docker-php-ext-install opcache
+#RUN docker-php-ext-install opcache
 
 ARG EXTENSION_DIR
 ARG CACHEBUST
